@@ -1,0 +1,36 @@
+##Dependencies
+    #salmon 0.81
+    #trimmomatic 0.36
+    #fastqc 0.11.5
+
+#########Set up############
+mkdir data scripts analysis
+mkdir data/reference data/reads
+
+#########Trimming and QC#########
+
+##For loop to set up trimmomatic input, removes suffix _R1.fastq.gz and uses the prefix as the variable ${newfile}. Probably could have just used the Trimmomatic -basein command of *_R1.fastq.gz
+
+for i in *_R1.fastq.gz
+do
+     echo working with $i
+     newfile="$(basename $i _R1.fastq.gz)"
+     echo "${newfile}"
+    trimmomatic PE ${newfile}_R1.fastq.gz ${newfile}_R2.fastq.gz -baseout ${newfile}.qc.fq.gz ILLUMINACLIP:TruSeq2-PE.fa:2:40:15 LEADING:2 TRAILING:2 SLIDINGWINDOW:4:2 MINLEN:25
+done
+
+##Generates a QC report for all fastq files present in the directory
+fastqc *
+
+##Creates a salmon index using fasta file contained within /data/reference
+for i in data/reference/*.fna
+do
+      salmon index --index $i.salmon --type quasi --transcripts $i
+done
+
+#Aligns and counts all trimmed data in reads folder to the salmon index generated in the previous step
+for i in data/reads/*.qc_1P.fq.gz
+do
+    newfile="$(basename $i .qc_1P.fq.gz)"
+    salmon quant -i data/reference/*.salmon -l A -1 data/reads/${newfile}.qc_1P.fq.gz -2 data/reads/${newfile}.qc_2P.fq.gz -o A_5/${newfile} --seqBias --gcBias
+done
